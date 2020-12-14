@@ -3,7 +3,7 @@ from typing import Any, Dict, Hashable, List, Optional, TypeVar, Union
 
 # from promise import Promise, is_thenable
 from vine import promise, barrier, wrap
-from strawberry.sync_dataloader import dispatch
+from strawberry.sync_dataloader import dispatch, get_all_loaders
 
 from graphql import (
     ExecutionContext,
@@ -123,15 +123,13 @@ class ExecutionContextWithPromise(ExecutionContext):
         result = super().execute_operation(operation, root_value)
 
         # Run all data loaders
-        # TODO
-        ready = False
-        while not ready:
-            dataloaders = self.context_value["dataloaders"]
-            for loader in dataloaders.values():
+        while True:
+            loaders = get_all_loaders()
+            for loader in loaders:
                 dispatch(loader)
 
-            if all([loader.is_ready for loader in dataloaders.values()]):
-                ready = True
+            if all([loader.is_ready for loader in loaders]):
+                break
 
         return result
 

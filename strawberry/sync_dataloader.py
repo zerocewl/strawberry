@@ -1,6 +1,8 @@
 import dataclasses
+import weakref
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar
+
 from vine import promise  # type: ignore
 
 from .exceptions import WrongNumberOfResultsReturned
@@ -35,6 +37,8 @@ class SyncDataLoader(Generic[K, T]):
     cache: bool = False
     cache_map: Dict[K, promise]
 
+    instances: List[weakref.ProxyType] = []
+
     def __init__(
         self,
         load_fn: Any,
@@ -50,6 +54,9 @@ class SyncDataLoader(Generic[K, T]):
 
         if self.cache:
             self.cache_map = {}
+
+        # Keep a reference to the instance
+        self.__class__.instances.append(weakref.proxy(self))
 
     def load(self, key: K):  # -> promise[T]:
         if self.cache:
@@ -97,6 +104,10 @@ def get_current_batch(loader: SyncDataLoader) -> Batch:
     loader.batches.append(Batch())
 
     return loader.batches[-1]
+
+
+def get_all_loaders():
+    return SyncDataLoader.instances
 
 
 def dispatch(loader: SyncDataLoader):

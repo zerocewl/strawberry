@@ -1,6 +1,14 @@
+import pytest
+
 import strawberry
 from strawberry.schema.execute_context import ExecutionContextWithPromise
 from strawberry.sync_dataloader import SyncDataLoader
+
+
+@pytest.fixture(autouse=True)
+def reset_sync_dataloaders_instances():
+    yield
+    SyncDataLoader.instances = []
 
 
 def test_batches_correct(mocker):
