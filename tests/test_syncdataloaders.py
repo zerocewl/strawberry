@@ -1,5 +1,14 @@
-from strawberry.sync_dataloader import SyncDataLoader, dispatch
+import pytest
+
 from strawberry.exceptions import WrongNumberOfResultsReturned
+from strawberry.sync_dataloader import SyncDataLoader, dispatch
+
+
+def get_promise_value(p):
+    if not p.ready:
+        raise Exception("Promise is not ready yet")
+
+    return p.value[0][0]
 
 
 def test_loading(mocker):
@@ -17,9 +26,9 @@ def test_loading(mocker):
 
     mock_loader.assert_called_once_with([1, 2, 3])
 
-    assert value_a.value[0][0] == 1
-    assert value_b.value[0][0] == 2
-    assert value_c.value[0][0] == 3
+    assert get_promise_value(value_a) == 1
+    assert get_promise_value(value_b) == 2
+    assert get_promise_value(value_c) == 3
 
 
 def test_gathering(mocker):
@@ -41,7 +50,7 @@ def test_gathering(mocker):
     values = []
     for batch in loader.batches:
         for task in batch.tasks:
-            values.append(task.future.value[0][0])
+            values.append(get_promise_value(task.future))
 
     assert values == [1, 2, 3]
 
@@ -63,131 +72,103 @@ def test_max_batch_size(mocker):
     mock_loader.assert_has_calls([mocker.call([1, 2]), mocker.call([3])])
 
 
-# async def test_error():
-#     async def idx(keys):
-#         return [ValueError()]
+def test_error():
+    def idx(keys):
+        return [ValueError()]
 
-#     loader = DataLoader(load_fn=idx)
+    loader = SyncDataLoader(load_fn=idx)
+    loader.load(1)
 
-#     with pytest.raises(ValueError):
-#         await loader.load(1)
-
-
-# async def test_error_and_values():
-#     async def idx(keys):
-#         if keys == [2]:
-#             return [2]
-
-#         return [ValueError()]
-
-#     loader = DataLoader(load_fn=idx)
-
-#     with pytest.raises(ValueError):
-#         await loader.load(1)
-
-#     assert await loader.load(2) == 2
+    with pytest.raises(ValueError):
+        dispatch(loader)
 
 
-# async def test_when_raising_error_in_loader():
-#     async def idx(keys):
-#         raise ValueError()
+def test_error_and_values():
+    def idx(keys):
+        if keys == [2]:
+            return [2]
 
-#     loader = DataLoader(load_fn=idx)
+        return [ValueError()]
 
-#     with pytest.raises(ValueError):
-#         await loader.load(1)
+    loader = SyncDataLoader(load_fn=idx)
+    loader.load(1)
 
-#     with pytest.raises(ValueError):
-#         await asyncio.gather(
-#             loader.load(1),
-#             loader.load(2),
-#             loader.load(3),
-#         )
+    with pytest.raises(ValueError):
+        dispatch(loader)
 
-
-# async def test_returning_wrong_number_of_results():
-#     async def idx(keys):
-#         return [1, 2]
-
-#     loader = DataLoader(load_fn=idx)
-
-#     with pytest.raises(
-#         WrongNumberOfResultsReturned,
-#         match=(
-#             "Received wrong number of results in dataloader, "
-#             "expected: 1, received: 2"
-#         ),
-#     ):
-#         await loader.load(1)
+    p = loader.load(2)
+    dispatch(loader)
+    assert p.ready
+    assert p.value[0][0]
 
 
-# async def test_caches_by_id(mocker):
-#     async def idx(keys):
-#         return keys
+def test_when_raising_error_in_loader():
+    def idx(keys):
+        raise ValueError()
 
-#     mock_loader = mocker.Mock(side_effect=idx)
+    loader = SyncDataLoader(load_fn=idx)
 
-#     loader = DataLoader(load_fn=mock_loader, cache=True)
+    loader.load(1)
+    loader.load(2)
+    loader.load(3)
 
-#     a = loader.load(1)
-#     b = loader.load(1)
-
-#     assert a == b
-
-#     assert await a == 1
-#     assert await b == 1
-
-#     mock_loader.assert_called_once_with([1])
+    with pytest.raises(ValueError):
+        dispatch(loader)
 
 
-# async def test_caches_by_id_when_loading_many(mocker):
-#     async def idx(keys):
-#         return keys
+def test_returning_wrong_number_of_results():
+    def idx(keys):
+        return [1, 2]
 
-#     mock_loader = mocker.Mock(side_effect=idx)
+    loader = SyncDataLoader(load_fn=idx)
+    loader.load(1)
 
-#     loader = DataLoader(load_fn=mock_loader, cache=True)
-
-#     a = loader.load(1)
-#     b = loader.load(1)
-
-#     assert a == b
-
-#     assert [1, 1] == await asyncio.gather(a, b)
-
-#     mock_loader.assert_called_once_with([1])
-
-
-# async def test_cache_disabled(mocker):
-#     async def idx(keys):
-#         return keys
-
-#     mock_loader = mocker.Mock(side_effect=idx)
-
-#     loader = DataLoader(load_fn=mock_loader, cache=False)
-
-#     a = loader.load(1)
-#     b = loader.load(1)
-
-#     assert a != b
-
-#     assert await a == 1
-#     assert await b == 1
-
-#     mock_loader.assert_has_calls([mocker.call([1, 1])])
+    with pytest.raises(
+        WrongNumberOfResultsReturned,
+        match=(
+            "Received wrong number of results in dataloader, "
+            "expected: 1, received: 2"
+        ),
+    ):
+        dispatch(loader)
 
 
-# async def test_cache_disabled_immediate_await(mocker):
-#     async def idx(keys):
-#         return keys
+def test_caches_by_id(mocker):
+    def idx(keys):
+        return keys
 
-#     mock_loader = mocker.Mock(side_effect=idx)
+    mock_loader = mocker.Mock(side_effect=idx)
 
-#     loader = DataLoader(load_fn=mock_loader, cache=False)
+    loader = SyncDataLoader(load_fn=mock_loader, cache=True)
 
-#     a = await loader.load(1)
-#     b = await loader.load(1)
+    a = loader.load(1)
+    b = loader.load(1)
 
-#     assert a == b
+    assert a == b
 
-#     mock_loader.assert_has_calls([mocker.call([1]), mocker.call([1])])
+    dispatch(loader)
+    assert get_promise_value(a) == 1
+    assert get_promise_value(b) == 1
+
+    mock_loader.assert_called_once_with([1])
+
+
+def test_cache_disabled(mocker):
+    def idx(keys):
+        return keys
+
+    mock_loader = mocker.Mock(side_effect=idx)
+
+    loader = SyncDataLoader(load_fn=mock_loader, cache=False)
+
+    a = loader.load(1)
+    b = loader.load(1)
+
+    assert a != b
+
+    dispatch(loader)
+
+    assert get_promise_value(a) == 1
+    assert get_promise_value(b) == 1
+
+    mock_loader.assert_has_calls([mocker.call([1, 1])])

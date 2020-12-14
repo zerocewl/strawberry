@@ -1,7 +1,7 @@
 import dataclasses
 import weakref
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar
+from typing import Any, Dict, Generic, List, Optional, TypeVar
 
 from vine import promise  # type: ignore
 
@@ -32,7 +32,6 @@ class Batch(Generic[K, T]):
 
 
 class SyncDataLoader(Generic[K, T]):
-    queue: List[LoaderTask]
     batches: List[Batch[K, T]]
     cache: bool = False
     cache_map: Dict[K, promise]
@@ -50,7 +49,6 @@ class SyncDataLoader(Generic[K, T]):
 
         self.cache = cache
         self.batches = []
-        self.queue = []
 
         if self.cache:
             self.cache_map = {}
@@ -58,7 +56,7 @@ class SyncDataLoader(Generic[K, T]):
         # Keep a reference to the instance
         self.__class__.instances.append(weakref.proxy(self))
 
-    def load(self, key: K):  # -> promise[T]:
+    def load(self, key: K) -> promise:
         if self.cache:
             future = self.cache_map.get(key)
 
@@ -120,8 +118,6 @@ def dispatch_batch(loader: SyncDataLoader, batch: Batch) -> None:
     batch.dispatched = True
 
     keys = [task.key for task in batch.tasks]
-
-    # TODO: check if load_fn return an awaitable and it is a list
 
     try:
         values = loader.load_fn(keys)
