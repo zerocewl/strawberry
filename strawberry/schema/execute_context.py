@@ -1,6 +1,9 @@
+from functools import partial
 from typing import Any, Dict, Hashable, List, Optional, TypeVar, Union
 
-from promise import Promise, is_thenable
+# from promise import Promise, is_thenable
+from vine import promise, barrier, wrap
+from strawberry.sync_dataloader import dispatch
 
 from graphql import (
     ExecutionContext,
@@ -17,6 +20,17 @@ from graphql.pyutils import (
 )
 
 
+def is_thenable(p):
+    return isinstance(p, promise)
+
+
+def get_promise_value(p):
+    if not p.ready:
+        raise Exception("Promise is not ready yet")
+
+    return p.value[0][0]
+
+
 def is_awaitable(value):
     """
     Create custom is_awaitable function to make sure that Promises' aren't
@@ -27,12 +41,67 @@ def is_awaitable(value):
     return default_is_awaitable(value)
 
 
+class PromiseList:
+    def __init__(self, values):
+        self.promise = promise()
+        self._length = len(values)
+        self._total_resolved = 0
+        self._original_values = list(values)
+        self._values = list(values)
+
+        for i, val in enumerate(values):
+            if is_thenable(val):
+                if val.ready:
+                    self._promise_fulfilled(i, get_promise_value(val))
+                elif val.failed:
+                    # TODO
+                    pass
+                else:
+                    val = val.then(
+                        wrap(
+                            promise(
+                                partial(self._promise_fulfilled, i),
+                                on_error=self._promise_rejected,
+                            )
+                        )
+                    )
+                    self._values[i] = val
+                # elif maybe_promise.is_fulfilled:
+                #     is_resolved = self._promise_fulfilled(maybe_promise._value(), i)
+                # elif maybe_promise.is_rejected:
+                #     is_resolved = self._promise_rejected(maybe_promise._reason(), promise=maybe_promise)
+
+            else:
+                self._promise_fulfilled(i, val)
+
+    def _promise_fulfilled(self, i, value):
+        if is_thenable(value):
+            value = get_promise_value(value)
+        self._values[i] = value
+        self._total_resolved += 1
+        if self._total_resolved >= self._length:
+            self._resolve(self._values)
+            return True
+        return False
+
+    def _promise_rejected(self, error):
+        self._total_resolved += 1
+        self._reject(error)
+        return True
+
+    def _resolve(self, values):
+        self.promise(values)
+
+    def _reject(self, error):
+        self.promise.throw(error)
+
+
 S = TypeVar("S")
 
 
 def promise_for_dict(
-    value: Dict[Hashable, Union[S, Promise[S]]]
-) -> Promise[Dict[Hashable, S]]:
+    value: Any,  # Dict[Hashable, Union[S, Promise[S]]]
+):  # -> Promise[Dict[Hashable, S]]:
     """
     A special function that takes a dictionary of promises
     and turns them into a promise for a dictionary of values.
@@ -42,7 +111,7 @@ def promise_for_dict(
         return_value = zip(value.keys(), resolved_values)
         return dict(return_value)
 
-    return Promise.all(value.values()).then(handle_success)
+    return PromiseList(value.values()).promise.then(handle_success)
 
 
 class ExecutionContextWithPromise(ExecutionContext):
@@ -51,14 +120,20 @@ class ExecutionContextWithPromise(ExecutionContext):
     def execute_operation(
         self, operation: OperationDefinitionNode, root_value: Any
     ) -> Optional[AwaitableOrValue[Any]]:
-        # Wrap execute in a Promise
-        original_execute_operation = super().execute_operation
+        result = super().execute_operation(operation, root_value)
 
-        def promise_executor(v):
-            return original_execute_operation(operation, root_value)
+        # Run all data loaders
+        # TODO
+        ready = False
+        while not ready:
+            dataloaders = self.context_value["dataloaders"]
+            for loader in dataloaders.values():
+                dispatch(loader)
 
-        promise = Promise.resolve(None).then(promise_executor)
-        return promise
+            if all([loader.is_ready for loader in dataloaders.values()]):
+                ready = True
+
+        return result
 
     def build_response(self, data):
         if is_thenable(data):
@@ -71,8 +146,8 @@ class ExecutionContextWithPromise(ExecutionContext):
             def on_resolve(data):
                 return original_build_response(data)
 
-            promise = data.catch(on_rejected).then(on_resolve)
-            return promise.get()
+            p = data.then(on_resolve, on_error=on_rejected)
+            return get_promise_value(p)
         return super().build_response(data)
 
     def complete_value_catching_error(
@@ -94,11 +169,11 @@ class ExecutionContextWithPromise(ExecutionContext):
                 def handle_error(error):
                     self.handle_field_error(error, field_nodes, path, return_type)
 
-                completed = Promise.resolve(result).then(
+                completed = result.then(
                     lambda resolved: self.complete_value(
                         return_type, field_nodes, info, path, resolved
                     ),
-                    handle_error,
+                    on_error=handle_error,
                 )
             else:
                 completed = self.complete_value(
@@ -121,7 +196,7 @@ class ExecutionContextWithPromise(ExecutionContext):
         Implements the "Evaluating selection sets" section of the spec for "read" mode.
         """
         contains_promise = False
-        results: Dict[Hashable, Union[Promise[Any], Any]] = {}
+        results = {}
         for response_name, field_nodes in fields.items():
             field_path = Path(path, response_name)
             result = self.resolve_field(
