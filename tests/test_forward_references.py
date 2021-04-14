@@ -9,8 +9,6 @@ from strawberry.printer import print_schema
 
 
 def test_forward_reference():
-    global MyType
-
     @strawberry.type
     class Query:
         me: MyType = strawberry.field(name="myself")
@@ -32,8 +30,6 @@ def test_forward_reference():
     schema = strawberry.Schema(Query)
 
     assert print_schema(schema) == textwrap.dedent(expected_representation).strip()
-
-    del MyType
 
 
 def test_with_resolver():
