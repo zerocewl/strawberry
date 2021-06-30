@@ -1,3 +1,4 @@
+from textwrap import dedent
 from typing import Any, Dict, Optional, cast
 
 import pytest
@@ -15,6 +16,7 @@ from graphql import (
 from graphql.pyutils import AwaitableOrValue
 
 import strawberry
+from strawberry.schema.schema_converter import GraphQLCoreConverter
 
 
 def test_generates_schema():
@@ -96,3 +98,39 @@ def test_custom_execution_context():
         "hello": "World",
         "extra": "data",
     }
+
+
+def test_custom_schema_converter():
+    class CustomGraphQLConverter(GraphQLCoreConverter):
+        def from_object_type(self, *args, **kwargs):
+            graphql_object_type = super().from_object_type(*args, **kwargs)
+            new_name = f"Custom{graphql_object_type.name}"
+
+            # update typemap
+            self.type_map[new_name] = self.type_map[graphql_object_type.name]
+            graphql_object_type.name = new_name
+
+            return graphql_object_type
+
+    class CustomSchema(strawberry.Schema):
+        def get_schema_converter(self):
+            return CustomGraphQLConverter()
+
+    @strawberry.type
+    class Query:
+        example: str
+
+    schema = CustomSchema(Query)
+    expected = dedent(
+        """\
+        schema {
+          query: CustomQuery
+        }
+
+        type CustomQuery {
+          example: String!
+        }
+        """
+    ).strip()
+
+    assert str(schema) == expected

@@ -42,7 +42,7 @@ class Schema:
     ):
         self.extensions = extensions
         self.execution_context_class = execution_context_class
-        self.schema_converter = GraphQLCoreConverter()
+        self.schema_converter = self.get_schema_converter()
 
         query_type = self.schema_converter.from_object_type(query)
         mutation_type = (
@@ -77,6 +77,9 @@ class Schema:
             raise ValueError(f"Invalid Schema. Errors:\n\n{formatted_errors}")
 
         self.query = self.schema_converter.type_map[query_type.name]
+
+    def get_schema_converter(self) -> GraphQLCoreConverter:
+        return GraphQLCoreConverter()
 
     def get_type_by_name(
         self, name: str
