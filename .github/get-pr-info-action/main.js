@@ -18,6 +18,8 @@ const run = async () => {
     username = github.context.payload.pull_request.user.login;
   } else if (eventName === "pull_request_target") {
     username = github.context.payload.pull_request_target.user.login;
+
+    console.log("event is pr target", github.context.payload);
   } else {
     const { repository } = payload;
 
