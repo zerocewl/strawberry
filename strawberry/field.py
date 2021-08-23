@@ -249,6 +249,9 @@ class StrawberryField(dataclasses.Field, GraphQLNameMixin):
         if self.base_resolver:
             return self.base_resolver(*args, **kwargs)
 
+        if isinstance(source, dict):
+            return source.get(self.python_name)
+
         return getattr(source, self.python_name)
 
     @property
