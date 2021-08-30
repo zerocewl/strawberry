@@ -266,7 +266,9 @@ def test_uses_default_for_optional_types_when_nothing_is_passed():
         ),
     ]
 
-    assert convert_arguments(args, arguments) == {"input": Input(UNSET, UNSET)}
+    assert convert_arguments(args, arguments) == {
+        "input": Input(numbers=UNSET, numbers_second=UNSET)
+    }
 
     # case 2
     args = {"input": {"numbersSecond": None}}
@@ -279,7 +281,9 @@ def test_uses_default_for_optional_types_when_nothing_is_passed():
         ),
     ]
 
-    assert convert_arguments(args, arguments) == {"input": Input(UNSET, None)}
+    assert convert_arguments(args, arguments) == {
+        "input": Input(numbers=UNSET, numbers_second=None)
+    }
 
 
 def test_when_optional():
