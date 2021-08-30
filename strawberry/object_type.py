@@ -1,11 +1,13 @@
 import dataclasses
+import sys
 from functools import partial
-from typing import List, Optional, Type, cast
+from typing import Dict, List, Optional, Type, cast
 
 from .exceptions import MissingFieldAnnotationError, MissingReturnAnnotationError
 from .field import StrawberryField
 from .types.type_resolver import _get_fields
 from .types.types import FederationTypeParams, TypeDefinition
+from .utils.dataclasses import add_custom_init_fn
 from .utils.str_converters import to_camel_case
 
 
@@ -82,7 +84,21 @@ def _wrap_dataclass(cls: Type):
     # Ensure all Fields have been properly type-annotated
     _check_field_annotations(cls)
 
-    return dataclasses.dataclass(cls)
+    dclass_kwargs: Dict[str, bool] = {}
+
+    # Python 3.10 introduces the kw_only param. If we're on an older version
+    # then generate our own custom init function
+    if sys.version_info >= (3, 10):
+        dclass_kwargs["kw_only"] = True
+    else:
+        dclass_kwargs["init"] = False
+
+    dclass = dataclasses.dataclass(cls, **dclass_kwargs)  # type: ignore
+
+    if sys.version_info < (3, 10):
+        add_custom_init_fn(dclass)
+
+    return dclass
 
 
 def _process_type(
