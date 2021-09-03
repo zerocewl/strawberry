@@ -45,10 +45,10 @@ DEFAULT_SCALAR_REGISTRY: Dict[object, ScalarDefinition] = {
     float: _make_scalar_definition(GraphQLFloat),
     bool: _make_scalar_definition(GraphQLBoolean),
     ID: _make_scalar_definition(GraphQLID),
-    UUID: base_scalars.UUID._scalar_definition,
-    Upload: Upload._scalar_definition,
-    datetime.date: base_scalars.Date._scalar_definition,
-    datetime.datetime: base_scalars.DateTime._scalar_definition,
-    datetime.time: base_scalars.Time._scalar_definition,
-    decimal.Decimal: base_scalars.Decimal._scalar_definition,
+    UUID: base_scalars.UUID._scalar_definition,  # type: ignore
+    Upload: Upload._scalar_definition,  # type: ignore
+    datetime.date: base_scalars.Date._scalar_definition,  # type: ignore
+    datetime.datetime: base_scalars.DateTime._scalar_definition,  # type: ignore
+    datetime.time: base_scalars.Time._scalar_definition,  # type: ignore
+    decimal.Decimal: base_scalars.Decimal._scalar_definition,  # type: ignore
 }

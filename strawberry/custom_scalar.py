@@ -1,11 +1,14 @@
 from dataclasses import dataclass
-from typing import Callable, Mapping, Optional, TypeVar, Union
+from typing import Callable, Mapping, Optional, Type, TypeVar, Union, overload
 
 from graphql import GraphQLScalarType
 
 from strawberry.type import StrawberryType
 
 from .utils.str_converters import to_camel_case
+
+
+_T = TypeVar("_T")
 
 
 def identity(x):
@@ -45,15 +48,14 @@ class ScalarWrapper:
 
 
 def _process_scalar(
-    cls,
+    cls: Type[_T],
     *,
-    name: str = None,
-    description: str = None,
-    serialize: Callable = None,
-    parse_value: Callable = None,
-    parse_literal: Callable = None
-):
-
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    serialize: Optional[Callable] = None,
+    parse_value: Optional[Callable] = None,
+    parse_literal: Optional[Callable] = None
+) -> Type[_T]:
     name = name or to_camel_case(cls.__name__)
 
     wrapper = ScalarWrapper(cls)
@@ -65,17 +67,55 @@ def _process_scalar(
         parse_value=parse_value,
     )
 
-    return wrapper
+    return wrapper  # type: ignore
+
+
+@overload
+def scalar(
+    cls: Type[_T],
+    *,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    serialize: Optional[Callable] = identity,
+    parse_value: Optional[Callable] = None,
+    parse_literal: Optional[Callable] = None
+) -> Type[_T]:
+    ...
+
+
+@overload
+def scalar(
+    cls: None,
+    *,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    serialize: Optional[Callable] = identity,
+    parse_value: Optional[Callable] = None,
+    parse_literal: Optional[Callable] = None
+) -> Callable[[Type[_T]], Type[_T]]:
+    ...
+
+
+@overload
+def scalar(
+    *,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    serialize: Optional[Callable] = identity,
+    parse_value: Optional[Callable] = None,
+    parse_literal: Optional[Callable] = None
+) -> Callable[[Type[_T]], Type[_T]]:
+    ...
 
 
 def scalar(
     cls=None,
     *,
-    name: str = None,
-    description: str = None,
-    serialize: Callable = identity,
-    parse_value: Optional[Callable] = None,
-    parse_literal: Optional[Callable] = None
+    name=None,
+    description=None,
+    serialize=identity,
+    parse_value=None,
+    parse_literal=None
 ):
     """Annotates a class or type as a GraphQL custom scalar.
 
