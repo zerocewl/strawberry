@@ -1,0 +1,46 @@
+- case: test_scalar_decorator
+  main: |
+    import strawberry
+
+    @strawberry.scalar()
+    class X:
+        pass
+
+    @strawberry.scalar
+    class Y:
+        pass
+
+    @strawberry.scalar(name="Zed")
+    class Z:
+        pass
+
+    reveal_type(X)
+    reveal_type(Y)
+    reveal_type(Z)
+    reveal_type(X())
+    reveal_type(Y())
+    reveal_type(Z())
+  out: |
+    main:15: note: Revealed type is "def () -> main.X"
+    main:16: note: Revealed type is "def () -> main.Y"
+    main:17: note: Revealed type is "def () -> main.Z"
+    main:18: note: Revealed type is "main.X"
+    main:19: note: Revealed type is "main.Y"
+    main:20: note: Revealed type is "main.Z"
+
+- case: test_scalar_as_function
+  main: |
+    import strawberry
+
+    X = strawberry.scalar(int)
+    Y = strawberry.scalar(str, name="Y")
+
+    reveal_type(X)
+    reveal_type(Y)
+    reveal_type(X())
+    reveal_type(Y())
+  out: |
+    main:6: note: Revealed type is "Type[builtins.int*]"
+    main:7: note: Revealed type is "Type[builtins.str*]"
+    main:8: note: Revealed type is "builtins.int*"
+    main:9: note: Revealed type is "builtins.str*"
