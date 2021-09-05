@@ -1,7 +1,6 @@
 from typing import Union, cast
 
 from strawberry.field import StrawberryField
-from strawberry.scalars import is_scalar
 from strawberry.type import StrawberryList, StrawberryOptional, StrawberryType
 
 
@@ -26,12 +25,13 @@ def _convert_from_pydantic_to_strawberry_type(
             )
 
         return items
-    elif is_scalar(type_):
-        return data
-    else:
+
+    if hasattr(type_, "_type_definition"):
         return convert_pydantic_model_to_strawberry_class(
             type_, model_instance=data_from_model, extra=extra
         )
+
+    return data
 
 
 def convert_pydantic_model_to_strawberry_class(cls, *, model_instance=None, extra=None):
